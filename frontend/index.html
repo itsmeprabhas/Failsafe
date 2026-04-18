@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <title>FAILSAFE — Student Risk Prediction System</title>
+    <meta name="description" content="Early warning system for at-risk students using XGBoost and SHAP explainability." />
+    <meta name="theme-color" content="#1e3a8a" />
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>" />
+    
+    <!-- Google Fonts (Inter) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+      *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background-color: #f8fafc;
+      }
+
+      /* Colorful Gradient Preloader */
+      #preloader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        /* Deep blue to bright blue gradient */
+        background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 40%, #2563eb 100%);
+        z-index: 9999;
+        transition: opacity 0.6s ease-out, visibility 0.6s ease-out;
+      }
+
+      #preloader.fade-out {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      /* Glowing Spinner */
+      .loader-icon {
+        width: 56px;
+        height: 56px;
+        border: 4px solid rgba(255, 255, 255, 0.2);
+        border-top: 4px solid #ffffff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 32px;
+        box-shadow: 0 0 25px rgba(255, 255, 255, 0.25);
+      }
+
+      /* Shield Icon */
+      .loader-shield {
+        font-size: 52px;
+        margin-bottom: 28px;
+        filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.3));
+        animation: float 2s ease-in-out infinite;
+      }
+
+      .loader-brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .loader-title {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: 5px;
+        color: #ffffff;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+      }
+
+      .loader-subtitle {
+        font-size: 15px;
+        color: rgba(255, 255, 255, 0.85);
+        font-weight: 400;
+        letter-spacing: 0.5px;
+      }
+
+      /* Animated dots */
+      .loader-dots::after {
+        content: '';
+        animation: dots 1.5s steps(4, end) infinite;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-8px); }
+      }
+
+      @keyframes dots {
+        0% { content: ''; }
+        25% { content: '.'; }
+        50% { content: '..'; }
+        75% { content: '...'; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Preloader -->
+    <div id="preloader">
+      <div class="loader-shield">🛡️</div>
+      <div class="loader-icon"></div>
+      <div class="loader-brand">
+        <div class="loader-title">FAILSAFE</div>
+        <div class="loader-subtitle">Initializing Prediction Engine<span class="loader-dots"></span></div>
+      </div>
+    </div>
+
+    <div id="root"></div>
+    
+    <script type="module" src="/src/main.jsx"></script>
+    
+    <script>
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          var preloader = document.getElementById('preloader');
+          if (preloader) {
+            preloader.classList.add('fade-out');
+            setTimeout(() => preloader.remove(), 600);
+          }
+        }, 1000);
+      });
+    </script>
+  </body>
+</html>
