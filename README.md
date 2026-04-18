@@ -15,18 +15,6 @@ FAILSAFE is an AI-powered Early Warning System designed to identify at-risk stud
 * **Machine Learning:** Scikit-learn, XGBoost, SHAP
 
 
-## Manual Start
-# Backend (Port 8000)
-cd backend
-source venv/bin/activate
-uvicorn app.main:app --reload
-
-# Frontend (Port 5173)
-cd frontend
-npm run dev
-
------ OR -----
-
 ##  Quick Start
 
 ### 1. Start the Database
@@ -36,5 +24,19 @@ Ensure PostgreSQL is running on port 5432 and create a database named `failsafe_
 You can use the provided shell script to start both servers simultaneously:
 ```bash
 ./run.sh
+```
 
+
+## Manual Start
+# Backend (Port 8000)
+```bash
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --reload
+```
+# Frontend (Port 5173)
+```bash
+cd frontend
+npm run dev
+```
  
