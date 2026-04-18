@@ -37,6 +37,7 @@ npm run dev
 ```
 
 ### 3. Demo Credentials
+        User / Password
 * Admin: `admin / admin123`
 * Faculty: `faculty1 / faculty123`
 * HOD: `hod1 / hod123`
