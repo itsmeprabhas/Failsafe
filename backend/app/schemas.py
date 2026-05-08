@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -130,3 +131,40 @@ class DashboardOverview(BaseModel):
 class RiskTrend(BaseModel):
     dates: List[str]
     values: List[int]
+
+# Student Progress Schemas
+class StudentProgressResponse(BaseModel):
+    id: int
+    student_record_id: int
+    risk_score: float
+    risk_level: str
+    previous_risk_score: Optional[float]
+    risk_change: Optional[float]
+    semester: Optional[str]
+    academic_year: Optional[str]
+    active_interventions_count: int
+    completed_interventions_count: int
+    snapshot_date: datetime
+    
+    class Config:
+        from_attributes = True
+
+class ApplyInterventionsRequest(BaseModel):
+    student_record_id: int
+    interventions: List[Dict[str, Any]]
+
+class SemesterComparison(BaseModel):
+    semester: str
+    academic_year: str
+    total_students: int
+    at_risk_students: int
+    at_risk_percentage: float
+    avg_risk_score: float
+    improvement_rate: float  # % of students whose risk decreased
+
+class ImprovementMetrics(BaseModel):
+    total_with_interventions: int
+    improved_count: int
+    improvement_rate: float
+    avg_risk_reduction: float
+    intervention_effectiveness: Dict[str, float]  # type -> success rate

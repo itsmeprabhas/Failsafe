@@ -121,7 +121,7 @@ export default function Login() {
         
         {/* Footer text */}
         <p className="text-center text-primary-300/60 text-xs mt-8 tracking-wide">
-          © 2024 FAILSAFE • Powered by XGBoost & SHAP
+          © {new Date().getFullYear()} FAILSAFE • Powered by XGBoost & SHAP
         </p>
       </div>
     </div>

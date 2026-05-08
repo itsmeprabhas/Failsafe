@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -129,3 +130,29 @@ class DashboardMetrics(Base):
     intervention_type_distribution = Column(JSON, nullable=True)
     
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+class StudentProgress(Base):
+    __tablename__ = "student_progress"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    student_record_id = Column(Integer, ForeignKey("student_records.id"), index=True)
+    batch_id = Column(Integer, ForeignKey("data_batches.id"))
+    
+    # Snapshot of risk at this point in time
+    risk_score = Column(Float, nullable=False)
+    risk_level = Column(String, nullable=False)
+    
+    # Change from previous snapshot
+    previous_risk_score = Column(Float, nullable=True)
+    risk_change = Column(Float, nullable=True)  # negative = improvement
+    
+    # Context
+    semester = Column(String, nullable=True)
+    academic_year = Column(String, nullable=True)
+    active_interventions_count = Column(Integer, default=0)
+    completed_interventions_count = Column(Integer, default=0)
+    
+    snapshot_date = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    student_record = relationship("StudentRecord", backref="progress_history")

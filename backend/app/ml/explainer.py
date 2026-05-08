@@ -7,6 +7,12 @@ import pandas as pd
 import shap
 import joblib
 import os
+import io
+import base64
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend for server
+import matplotlib.pyplot as plt
+import seaborn as sns
 from typing import Dict, List, Any, Tuple
 
 class SHAPExplainer:
@@ -250,6 +256,134 @@ class SHAPExplainer:
             return f"Student is at elevated risk due to {primary_str}. Early intervention with targeted support recommended."
         else:
             return f"Student shows some risk indicators, particularly {primary_str}. Proactive monitoring and minor adjustments may prevent escalation."
+    
+    def generate_shap_plot(self, student_data: Dict[str, Any]) -> str:
+        """
+        Generate a SHAP waterfall-style horizontal bar chart for a single student.
+        Returns base64-encoded PNG image string.
+        """
+        # Prepare features
+        df = pd.DataFrame([student_data])
+        df_encoded = self.encode_categorical(df)
+        
+        available_features = [f for f in self.feature_columns if f in df_encoded.columns]
+        X = df_encoded[available_features].values
+        X_scaled = self.scaler.transform(X)
+        
+        # Get SHAP values
+        shap_values = self.explainer.shap_values(X_scaled)[0]
+        
+        # Create readable labels
+        labels = [self.feature_descriptions.get(f, f) for f in available_features]
+        values = [float(v) for v in shap_values]
+        
+        # Sort by absolute value
+        sorted_pairs = sorted(zip(labels, values), key=lambda x: abs(x[1]))
+        sorted_labels, sorted_values = zip(*sorted_pairs)
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 6))
+        colors = ['#ef4444' if v > 0 else '#22c55e' for v in sorted_values]
+        
+        bars = ax.barh(range(len(sorted_labels)), sorted_values, color=colors, 
+                       edgecolor='none', height=0.6)
+        
+        ax.set_yticks(range(len(sorted_labels)))
+        ax.set_yticklabels(sorted_labels, fontsize=11, fontfamily='sans-serif')
+        ax.set_xlabel('SHAP Value (Impact on Risk)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Why is {student_data.get("student_name", "Student")} Flagged?', 
+                     fontsize=14, fontweight='bold', pad=15)
+        
+        # Add value labels on bars
+        for bar, val in zip(bars, sorted_values):
+            x_pos = bar.get_width()
+            ax.text(x_pos + (0.002 if val >= 0 else -0.002), bar.get_y() + bar.get_height()/2,
+                    f'{val:+.3f}', va='center', ha='left' if val >= 0 else 'right',
+                    fontsize=9, fontweight='bold', color='#374151')
+        
+        # Style
+        ax.axvline(x=0, color='#9ca3af', linewidth=0.8, linestyle='-')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.tick_params(left=False)
+        
+        # Legend
+        from matplotlib.patches import Patch
+        legend_elements = [
+            Patch(facecolor='#ef4444', label='Increases Risk'),
+            Patch(facecolor='#22c55e', label='Decreases Risk')
+        ]
+        ax.legend(handles=legend_elements, loc='lower right', frameon=True, 
+                  fancybox=True, shadow=False, fontsize=10)
+        
+        plt.tight_layout()
+        
+        # Convert to base64
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                    facecolor='white', edgecolor='none')
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode('utf-8')
+    
+    def generate_batch_summary_plot(self, students_data: List[Dict[str, Any]]) -> str:
+        """
+        Generate a SHAP summary plot for a batch of students.
+        Shows which features are most important across all students.
+        Returns base64-encoded PNG image string.
+        """
+        if not students_data:
+            return ""
+        
+        # Prepare features for all students
+        df = pd.DataFrame(students_data)
+        df_encoded = self.encode_categorical(df)
+        
+        available_features = [f for f in self.feature_columns if f in df_encoded.columns]
+        X = df_encoded[available_features].values
+        X_scaled = self.scaler.transform(X)
+        
+        # Get SHAP values for all students
+        all_shap = self.explainer.shap_values(X_scaled)
+        
+        # Calculate mean absolute SHAP values per feature
+        mean_abs_shap = np.mean(np.abs(all_shap), axis=0)
+        labels = [self.feature_descriptions.get(f, f) for f in available_features]
+        
+        # Sort
+        sorted_pairs = sorted(zip(labels, mean_abs_shap), key=lambda x: x[1])
+        sorted_labels, sorted_values = zip(*sorted_pairs)
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Gradient colors based on importance
+        norm_values = np.array(sorted_values) / max(sorted_values)
+        colors = plt.cm.RdYlGn_r(norm_values)  # Red for high impact
+        
+        ax.barh(range(len(sorted_labels)), sorted_values, color=colors, 
+                edgecolor='none', height=0.6)
+        
+        ax.set_yticks(range(len(sorted_labels)))
+        ax.set_yticklabels(sorted_labels, fontsize=11)
+        ax.set_xlabel('Mean |SHAP Value| (Average Impact)', fontsize=12, fontweight='bold')
+        ax.set_title('Feature Importance Across All Students', 
+                     fontsize=14, fontweight='bold', pad=15)
+        
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.tick_params(left=False)
+        
+        plt.tight_layout()
+        
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                    facecolor='white', edgecolor='none')
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode('utf-8')
 
 
 # Singleton instance

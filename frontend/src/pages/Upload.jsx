@@ -4,11 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 
 export default function UploadPage() {
+  const currentYear = new Date().getFullYear();
   const [file, setFile] = useState(null);
   const [metadata, setMetadata] = useState({
     batch_name: '',
-    semester: 'Fall 2024',
-    academic_year: '2024-2025',
+    semester: `Fall ${currentYear}`,
+    academic_year: `${currentYear}-${currentYear + 1}`,
     subject: '',
   });
   const [uploading, setUploading] = useState(false);
@@ -147,9 +148,11 @@ export default function UploadPage() {
               onChange={(e) => setMetadata({ ...metadata, semester: e.target.value })}
               className="input-field"
             >
-              <option>Fall 2024</option>
-              <option>Spring 2024</option>
-              <option>Summer 2024</option>
+              <option>Fall {currentYear}</option>
+              <option>Spring {currentYear}</option>
+              <option>Summer {currentYear}</option>
+              <option>Fall {currentYear - 1}</option>
+              <option>Spring {currentYear - 1}</option>
             </select>
           </div>
           <div>

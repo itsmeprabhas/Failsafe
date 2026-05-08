@@ -3,7 +3,8 @@ import { uploadAPI, predictionAPI } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { 
   AlertTriangle, ChevronDown, ChevronUp, Eye, 
-  Target, BarChart3, User, ArrowRight
+  Target, BarChart3, User, ArrowRight, Zap, CheckCircle,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function Predictions() {
@@ -15,6 +16,10 @@ export default function Predictions() {
   const [expandedStudent, setExpandedStudent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [applyingFor, setApplyingFor] = useState(null);
+  const [applySuccess, setApplySuccess] = useState({});
+  const [batchShapPlot, setBatchShapPlot] = useState(null);
+  const [shapLoading, setShapLoading] = useState(false);
 
   useEffect(() => {
     fetchBatches();
@@ -34,22 +39,63 @@ export default function Predictions() {
   const fetchPredictions = async (batchId) => {
     setSelectedBatch(batchId);
     setLoading(true);
+    setBatchShapPlot(null);
     try {
-      // Fetch batch-level predictions
       const batch = batches.find(b => b.id === batchId);
-      
-      // Fetch auto interventions which contain student details
       const response = await predictionAPI.getAutoInterventions(batchId);
       setInterventions(response.data);
       setBatchPredictions({
         total_students: batch?.total_students || 0,
         at_risk_count: batch?.at_risk_count || 0,
-        risk_distribution: { High: response.data.filter(s => s.risk_level === 'High').length, Critical: response.data.filter(s => s.risk_level === 'Critical').length, Medium: response.data.filter(s => s.risk_level === 'Medium').length, Low: response.data.filter(s => s.risk_level === 'Low').length }
+        risk_distribution: { 
+          High: response.data.filter(s => s.risk_level === 'High').length, 
+          Critical: response.data.filter(s => s.risk_level === 'Critical').length, 
+          Medium: response.data.filter(s => s.risk_level === 'Medium').length, 
+          Low: response.data.filter(s => s.risk_level === 'Low').length 
+        }
       });
     } catch (error) {
       console.error('Failed to fetch predictions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApplyInterventions = async (student) => {
+    setApplyingFor(student.student_id);
+    try {
+      // Find the student record ID from the batch
+      // We need to find the actual DB id; we'll use the student_id to query
+      const batchRecords = await uploadAPI.getBatches();
+      const currentBatch = batchRecords.data.find(b => b.id === selectedBatch);
+      
+      // Use the student data we already have
+      await predictionAPI.applyInterventions({
+        student_record_id: student.student_record_id || student.id || 0,
+        interventions: student.recommended_interventions || [],
+      });
+      
+      setApplySuccess(prev => ({ ...prev, [student.student_id]: true }));
+      setTimeout(() => {
+        setApplySuccess(prev => ({ ...prev, [student.student_id]: false }));
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to apply interventions:', error);
+    } finally {
+      setApplyingFor(null);
+    }
+  };
+
+  const fetchBatchShapSummary = async () => {
+    if (!selectedBatch) return;
+    setShapLoading(true);
+    try {
+      const res = await predictionAPI.getBatchShapSummary(selectedBatch);
+      setBatchShapPlot(res.data.plot);
+    } catch (error) {
+      console.error('Failed to fetch SHAP summary:', error);
+    } finally {
+      setShapLoading(false);
     }
   };
 
@@ -122,6 +168,50 @@ export default function Predictions() {
         </div>
       )}
 
+      {/* Batch SHAP Summary */}
+      {selectedBatch && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <ImageIcon className="w-4 h-4" />
+              Batch Feature Importance (SHAP Summary)
+            </h3>
+            {!batchShapPlot && (
+              <button
+                onClick={fetchBatchShapSummary}
+                disabled={shapLoading}
+                className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
+              >
+                {shapLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <BarChart3 className="w-4 h-4" />
+                    Generate Summary
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          {batchShapPlot ? (
+            <div className="bg-white rounded-lg p-2 border border-gray-100">
+              <img 
+                src={`data:image/png;base64,${batchShapPlot}`} 
+                alt="SHAP Feature Importance Summary" 
+                className="w-full max-w-3xl mx-auto"
+              />
+            </div>
+          ) : (
+            <p className="text-gray-400 text-sm text-center py-6">
+              Generate a SHAP summary to see which features most impact risk across all students in this batch.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Filter */}
       {interventions && interventions.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -183,18 +273,53 @@ export default function Predictions() {
                   )}
                 </div>
 
-                {/* View Detail Button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Navigate to student detail if we have the record id
-                    navigate(`/predictions/student/${idx}`);
-                  }}
-                  className="ml-4 flex items-center gap-1 px-3 py-1.5 text-sm text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                >
-                  <Eye className="w-4 h-4" />
-                  Detail
-                </button>
+                {/* Action Buttons */}
+                <div className="ml-4 flex items-center gap-2">
+                  {/* Apply Interventions Button */}
+                  {student.recommended_interventions?.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleApplyInterventions(student);
+                      }}
+                      disabled={applyingFor === student.student_id || applySuccess[student.student_id]}
+                      className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                        applySuccess[student.student_id]
+                          ? 'bg-green-100 text-green-700'
+                          : 'text-emerald-600 hover:bg-emerald-50 border border-emerald-200'
+                      }`}
+                    >
+                      {applySuccess[student.student_id] ? (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          Applied!
+                        </>
+                      ) : applyingFor === student.student_id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-emerald-600"></div>
+                          Applying...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4" />
+                          Apply
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* View Detail Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/predictions/student/${idx}`);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Detail
+                  </button>
+                </div>
               </div>
 
               {/* Expanded Content */}
@@ -238,7 +363,7 @@ export default function Predictions() {
                           <div key={i} className="border border-gray-200 rounded-lg p-3">
                             <p className="font-medium text-sm">{intervention.title}</p>
                             <p className="text-xs text-gray-500 mt-1">
-                              {intervention.intervention_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              {intervention.type?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                             </p>
                             <p className="text-xs text-gray-400">
                               Schedule: {new Date(intervention.scheduled_date).toLocaleDateString()}

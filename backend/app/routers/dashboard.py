@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from ..database import get_db
-from ..models import User, DataBatch, StudentRecord, Intervention
+from ..models import User, DataBatch, StudentRecord, Intervention, StudentProgress
 from ..auth import require_role
 from datetime import datetime, timedelta
 
@@ -146,3 +146,126 @@ def get_top_risk_students(
         }
         for s in students
     ]
+
+@router.get("/semester-comparison")
+def get_semester_comparison(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("faculty", "hod", "admin"))
+):
+    """Compare risk metrics across semesters for trend monitoring"""
+    # Group by semester and academic year
+    semester_stats = db.query(
+        DataBatch.semester,
+        DataBatch.academic_year,
+        func.sum(DataBatch.total_students).label('total'),
+        func.sum(DataBatch.at_risk_count).label('at_risk')
+    ).filter(
+        DataBatch.processed == True
+    ).group_by(
+        DataBatch.semester, DataBatch.academic_year
+    ).order_by(
+        DataBatch.academic_year, DataBatch.semester
+    ).all()
+    
+    results = []
+    for stat in semester_stats:
+        total = stat.total or 0
+        at_risk = stat.at_risk or 0
+        
+        # Calculate average risk score for this semester
+        avg_risk = db.query(func.avg(StudentRecord.failure_risk_score)).join(
+            DataBatch
+        ).filter(
+            DataBatch.semester == stat.semester,
+            DataBatch.academic_year == stat.academic_year,
+            DataBatch.processed == True,
+            StudentRecord.failure_risk_score.isnot(None)
+        ).scalar() or 0
+        
+        # Calculate improvement rate (students whose risk decreased)
+        improved = db.query(func.count(StudentProgress.id)).filter(
+            StudentProgress.semester == stat.semester,
+            StudentProgress.academic_year == stat.academic_year,
+            StudentProgress.risk_change < 0  # negative = improved
+        ).scalar() or 0
+        
+        total_with_progress = db.query(func.count(StudentProgress.id)).filter(
+            StudentProgress.semester == stat.semester,
+            StudentProgress.academic_year == stat.academic_year,
+            StudentProgress.risk_change.isnot(None)
+        ).scalar() or 0
+        
+        results.append({
+            "semester": stat.semester,
+            "academic_year": stat.academic_year,
+            "total_students": total,
+            "at_risk_students": at_risk,
+            "at_risk_percentage": round((at_risk / total * 100), 1) if total > 0 else 0,
+            "avg_risk_score": round(float(avg_risk), 4),
+            "improvement_rate": round((improved / total_with_progress * 100), 1) if total_with_progress > 0 else 0
+        })
+    
+    return results
+
+@router.get("/improvement-metrics")
+def get_improvement_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("faculty", "hod", "admin"))
+):
+    """Get overall improvement metrics — how effective are interventions?"""
+    # Students who have completed interventions
+    students_with_completed = db.query(StudentRecord.id).join(
+        Intervention
+    ).filter(
+        Intervention.status == "Completed"
+    ).distinct().all()
+    
+    student_ids = [s[0] for s in students_with_completed]
+    total_with_interventions = len(student_ids)
+    
+    if total_with_interventions == 0:
+        return {
+            "total_with_interventions": 0,
+            "improved_count": 0,
+            "improvement_rate": 0,
+            "avg_risk_reduction": 0,
+            "intervention_effectiveness": {}
+        }
+    
+    # Check progress snapshots for improvement
+    improved_count = 0
+    total_risk_change = 0
+    
+    for sid in student_ids:
+        # Get latest progress snapshot
+        latest = db.query(StudentProgress).filter(
+            StudentProgress.student_record_id == sid,
+            StudentProgress.risk_change.isnot(None)
+        ).order_by(StudentProgress.snapshot_date.desc()).first()
+        
+        if latest and latest.risk_change is not None:
+            if latest.risk_change < 0:
+                improved_count += 1
+            total_risk_change += latest.risk_change
+    
+    # Effectiveness by intervention type
+    intervention_types = db.query(
+        Intervention.intervention_type,
+        func.count(Intervention.id).label('total'),
+        func.count(case(
+            (Intervention.status == 'Completed', 1),
+        )).label('completed')
+    ).group_by(Intervention.intervention_type).all()
+    
+    effectiveness = {}
+    for it in intervention_types:
+        rate = round((it.completed / it.total * 100), 1) if it.total > 0 else 0
+        effectiveness[it.intervention_type] = rate
+    
+    return {
+        "total_with_interventions": total_with_interventions,
+        "improved_count": improved_count,
+        "improvement_rate": round((improved_count / total_with_interventions * 100), 1) if total_with_interventions > 0 else 0,
+        "avg_risk_reduction": round(total_risk_change / total_with_interventions, 4) if total_with_interventions > 0 else 0,
+        "intervention_effectiveness": effectiveness
+    }

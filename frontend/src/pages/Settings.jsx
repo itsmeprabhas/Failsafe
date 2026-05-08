@@ -364,12 +364,14 @@ export default function Settings() {
               <div className="space-y-3">
                 {[
                   { label: 'Model Version', value: 'XGBoost 2.0.3' },
-                  { label: 'Explainability', value: 'SHAP 0.44.1' },
+                  { label: 'Explainability', value: 'SHAP 0.44.1 (Waterfall Plots)' },
                   { label: 'Backend', value: 'FastAPI 0.109.2' },
                   { label: 'Database', value: 'PostgreSQL 15' },
                   { label: 'Authentication', value: 'JWT (HS256)' },
                   { label: 'Features Used', value: '11 student performance indicators' },
                   { label: 'Target Variable', value: 'At-Risk (Binary Classification)' },
+                  { label: 'Progress Tracking', value: 'Semester-over-semester risk history' },
+                  { label: 'Visualization', value: 'Matplotlib 3.8 + Recharts' },
                 ].map(item => (
                   <div key={item.label} className="flex justify-between p-3 bg-gray-50 rounded-lg">
                     <span className="text-sm text-gray-600">{item.label}</span>

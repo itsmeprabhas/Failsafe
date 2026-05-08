@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from ..database import get_db
-from ..models import User, DataBatch, StudentRecord, Intervention, PredictionLog, DashboardMetrics
+from ..models import User, DataBatch, StudentRecord, Intervention, PredictionLog, DashboardMetrics, StudentProgress
 from ..auth import require_role
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -23,6 +23,7 @@ def reset_predictions(
         })
         db.query(DataBatch).update({"processed": False, "at_risk_count": 0})
         db.query(PredictionLog).delete()
+        db.query(StudentProgress).delete()
         db.commit()
         return {"message": f"Cleared predictions for {updated} student records.", "affected": updated}
     except Exception as e:
@@ -59,6 +60,7 @@ def reset_student_data(
 
         db.query(Intervention).delete()
         db.query(PredictionLog).delete()
+        db.query(StudentProgress).delete()
         db.query(StudentRecord).delete()
         db.query(DataBatch).delete()
         db.query(DashboardMetrics).delete()
@@ -82,6 +84,7 @@ def reset_everything(
     try:
         db.query(Intervention).delete()
         db.query(PredictionLog).delete()
+        db.query(StudentProgress).delete()
         db.query(StudentRecord).delete()
         db.query(DataBatch).delete()
         db.query(DashboardMetrics).delete()

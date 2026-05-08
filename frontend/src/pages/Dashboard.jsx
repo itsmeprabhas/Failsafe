@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { dashboardAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { 
-  Users, AlertTriangle, TrendingUp, CheckCircle, 
-  BarChart3, ArrowUpRight, ArrowDownRight 
+  Users, AlertTriangle, TrendingUp, TrendingDown, CheckCircle, 
+  BarChart3, ArrowUpRight, ArrowDownRight, Activity, Zap
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line 
+  ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend,
+  RadialBarChart, RadialBar
 } from 'recharts';
 
 const RISK_COLORS = {
@@ -22,6 +23,8 @@ export default function Dashboard() {
   const [overview, setOverview] = useState(null);
   const [trends, setTrends] = useState(null);
   const [topStudents, setTopStudents] = useState([]);
+  const [semesterData, setSemesterData] = useState([]);
+  const [improvement, setImprovement] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,14 +33,18 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const [overviewRes, trendsRes, studentsRes] = await Promise.all([
+      const [overviewRes, trendsRes, studentsRes, semesterRes, improvementRes] = await Promise.all([
         dashboardAPI.getOverview(),
         dashboardAPI.getRiskTrends(30),
         dashboardAPI.getTopRiskStudents(10),
+        dashboardAPI.getSemesterComparison(),
+        dashboardAPI.getImprovementMetrics(),
       ]);
       setOverview(overviewRes.data);
       setTrends(trendsRes.data);
       setTopStudents(studentsRes.data);
+      setSemesterData(semesterRes.data);
+      setImprovement(improvementRes.data);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {
@@ -63,13 +70,21 @@ export default function Dashboard() {
     total: trends.total_counts[index],
   })) || [];
 
+  const semesterChartData = semesterData.map(s => ({
+    name: `${s.semester} ${s.academic_year}`,
+    at_risk_pct: s.at_risk_percentage,
+    avg_risk: Math.round(s.avg_risk_score * 100),
+    improvement: s.improvement_rate,
+    total: s.total_students,
+  }));
+
   const stats = [
     {
       title: 'Total Students',
       value: overview.total_students,
       icon: Users,
       color: 'bg-blue-500',
-      change: '+12%',
+      change: null,
     },
     {
       title: 'At-Risk Students',
@@ -116,7 +131,7 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold mt-1">{stat.value}</p>
                 {stat.change && (
                   <p className="text-xs text-gray-500 mt-1">
-                    {stat.change} from last month
+                    {stat.change} of total
                   </p>
                 )}
               </div>
@@ -127,6 +142,40 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Improvement Metrics Banner */}
+      {improvement && improvement.total_with_interventions > 0 && (
+        <div className="card bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200">
+          <div className="flex items-center gap-6 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                <TrendingDown className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-sm text-emerald-700 font-medium">Intervention Effectiveness</p>
+                <p className="text-2xl font-bold text-emerald-900">{improvement.improvement_rate}%</p>
+              </div>
+            </div>
+            <div className="h-12 w-px bg-emerald-200 hidden md:block" />
+            <div>
+              <p className="text-sm text-emerald-700">{improvement.improved_count} of {improvement.total_with_interventions} students improved</p>
+              <p className="text-xs text-emerald-600">Avg. risk reduction: {Math.abs(improvement.avg_risk_reduction * 100).toFixed(1)}%</p>
+            </div>
+            {Object.keys(improvement.intervention_effectiveness || {}).length > 0 && (
+              <>
+                <div className="h-12 w-px bg-emerald-200 hidden md:block" />
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(improvement.intervention_effectiveness).map(([type, rate]) => (
+                    <span key={type} className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg">
+                      {type.replace('_', ' ')}: {rate}%
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -185,6 +234,7 @@ export default function Dashboard() {
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
+                <Legend />
                 <Line 
                   type="monotone" 
                   dataKey="at_risk" 
@@ -206,6 +256,28 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Semester Comparison */}
+      {semesterChartData.length > 0 && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-5 h-5 text-primary-600" />
+            <h3 className="text-lg font-semibold">Semester-over-Semester Comparison</h3>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={semesterChartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="at_risk_pct" fill="#f97316" name="At-Risk %" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="avg_risk" fill="#ef4444" name="Avg Risk Score" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="improvement" fill="#22c55e" name="Improvement %" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Top Risk Students Table */}
       <div className="card">

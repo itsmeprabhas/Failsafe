@@ -3,15 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { predictionAPI, interventionAPI } from '../services/api';
 import {
   ArrowLeft, User, AlertTriangle, Target,
-  ClipboardList, CheckCircle
+  ClipboardList, CheckCircle, TrendingDown, TrendingUp, Image
 } from 'lucide-react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend
+} from 'recharts';
 
 export default function StudentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [student, setStudent] = useState(null);
   const [interventions, setInterventions] = useState([]);
+  const [shapPlot, setShapPlot] = useState(null);
+  const [progress, setProgress] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [plotLoading, setPlotLoading] = useState(false);
 
   useEffect(() => {
     fetchStudentData();
@@ -20,16 +27,30 @@ export default function StudentDetail() {
   const fetchStudentData = async () => {
     setLoading(true);
     try {
-      const [studentRes, interventionsRes] = await Promise.all([
+      const [studentRes, interventionsRes, progressRes] = await Promise.all([
         predictionAPI.getStudentPrediction(id),
         interventionAPI.getByStudent(id),
+        predictionAPI.getStudentProgress(id),
       ]);
       setStudent(studentRes.data);
       setInterventions(interventionsRes.data);
+      setProgress(progressRes.data);
     } catch (error) {
       console.error('Failed to fetch student data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchShapPlot = async () => {
+    setPlotLoading(true);
+    try {
+      const res = await predictionAPI.getStudentShapPlot(id);
+      setShapPlot(res.data.plot);
+    } catch (error) {
+      console.error('Failed to fetch SHAP plot:', error);
+    } finally {
+      setPlotLoading(false);
     }
   };
 
@@ -61,6 +82,12 @@ export default function StudentDetail() {
       </div>
     );
   }
+
+  const progressChartData = progress.map(p => ({
+    date: p.date ? new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
+    risk: Math.round(p.risk_score * 100),
+    interventions: p.completed_interventions,
+  }));
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -180,7 +207,47 @@ export default function StudentDetail() {
         </div>
       </div>
 
-      {/* SHAP Values Chart */}
+      {/* SHAP Waterfall Plot (Visual) */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-gray-500 flex items-center gap-2">
+            <Image className="w-4 h-4" />
+            SHAP Explanation Plot
+          </h3>
+          {!shapPlot && (
+            <button
+              onClick={fetchShapPlot}
+              disabled={plotLoading}
+              className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
+            >
+              {plotLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  Generating...
+                </>
+              ) : (
+                'Generate SHAP Plot'
+              )}
+            </button>
+          )}
+        </div>
+        {shapPlot ? (
+          <div className="bg-white rounded-lg p-2 border border-gray-100">
+            <img 
+              src={`data:image/png;base64,${shapPlot}`} 
+              alt="SHAP Explanation Plot" 
+              className="w-full max-w-3xl mx-auto"
+            />
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            <Image className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">Click "Generate SHAP Plot" to see visual explanation</p>
+          </div>
+        )}
+      </div>
+
+      {/* SHAP Values Bar Chart */}
       {student.shap_values && (
         <div className="card">
           <h3 className="text-sm font-medium text-gray-500 mb-4">Feature Contributions (SHAP Values)</h3>
@@ -230,6 +297,65 @@ export default function StudentDetail() {
             <span className="flex items-center gap-1">
               <div className="w-3 h-3 bg-green-400 rounded" /> Decreases risk
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Progress Over Time */}
+      {progressChartData.length > 1 && (
+        <div className="card">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingDown className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-lg font-semibold">Risk Progress Over Time</h3>
+          </div>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={progressChartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} domain={[0, 100]} />
+              <Tooltip />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="risk" 
+                stroke="#ef4444" 
+                strokeWidth={2}
+                name="Risk Score (%)"
+                dot={{ fill: '#ef4444' }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="interventions" 
+                stroke="#22c55e" 
+                strokeWidth={2}
+                name="Completed Interventions"
+                dot={{ fill: '#22c55e' }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="mt-3 grid grid-cols-2 gap-4 text-center">
+            {progress.length >= 2 && (
+              <>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-500">First Recorded Risk</p>
+                  <p className="text-lg font-bold">{(progress[0].risk_score * 100).toFixed(1)}%</p>
+                </div>
+                <div className={`p-3 rounded-lg ${
+                  progress[progress.length - 1].risk_score < progress[0].risk_score 
+                    ? 'bg-green-50' : 'bg-red-50'
+                }`}>
+                  <p className="text-xs text-gray-500">Current Risk</p>
+                  <p className="text-lg font-bold flex items-center justify-center gap-1">
+                    {(progress[progress.length - 1].risk_score * 100).toFixed(1)}%
+                    {progress[progress.length - 1].risk_score < progress[0].risk_score ? (
+                      <TrendingDown className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <TrendingUp className="w-4 h-4 text-red-600" />
+                    )}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

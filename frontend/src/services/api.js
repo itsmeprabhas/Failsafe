@@ -62,6 +62,10 @@ export const predictionAPI = {
   runPredictions: (batchId) => api.post(`/predictions/run/${batchId}`),
   getStudentPrediction: (studentRecordId) => api.get(`/predictions/student/${studentRecordId}`),
   getAutoInterventions: (batchId) => api.get(`/predictions/interventions/${batchId}`),
+  getStudentShapPlot: (studentRecordId) => api.get(`/predictions/student/${studentRecordId}/shap-plot`),
+  getBatchShapSummary: (batchId) => api.get(`/predictions/batch/${batchId}/shap-summary`),
+  applyInterventions: (data) => api.post('/predictions/apply-interventions', data),
+  getStudentProgress: (studentRecordId) => api.get(`/predictions/student/${studentRecordId}/progress`),
 };
 
 // Intervention APIs
@@ -79,6 +83,8 @@ export const dashboardAPI = {
   getRiskTrends: (days = 30) => api.get(`/dashboard/risk-trends?days=${days}`),
   getDepartmentAnalysis: () => api.get('/dashboard/department-analysis'),
   getTopRiskStudents: (limit = 10) => api.get(`/dashboard/top-risk-students?limit=${limit}`),
+  getSemesterComparison: () => api.get('/dashboard/semester-comparison'),
+  getImprovementMetrics: () => api.get('/dashboard/improvement-metrics'),
 };
 
 // Admin / Reset APIs
@@ -90,4 +96,3 @@ export const adminAPI = {
 };
 
 export default api;
-
